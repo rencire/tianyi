@@ -3,30 +3,23 @@ mod darwin;
 
 #[derive(Parser)]
 #[command(version, about = "Tianyi rebuild manager")]
-struct Cli {
-    #[command(subcommand)]
-    command: Subcommand,
-}
-
-/// Supported subcommands matching SPEC.md
-#[derive(clap::Subcommand)]
-enum Subcommand {
+enum Cli {
     /// Build system configuration
-    Build,
+    Build { hostname: String },
     /// Build and activate configuration
-    Switch,
+    Switch { hostname: String },
     /// Activate existing build
-    Activate,
+    Activate { hostname: String },
 }
 
 fn main() {
-    let subcommand = match Cli::parse().command {
-        Subcommand::Build => "build",
-        Subcommand::Switch => "switch",
-        Subcommand::Activate => "activate",
+    let (subcommand, hostname) = match Cli::parse() {
+        Cli::Build { hostname } => ("build", hostname),
+        Cli::Switch { hostname } => ("switch", hostname),
+        Cli::Activate { hostname } => ("activate", hostname),
     };
 
-    if let Err(e) = darwin::execute(subcommand) {
+    if let Err(e) = darwin::execute(subcommand, &hostname) {
         eprintln!("Error: {}", e);
         std::process::exit(1);
     }
