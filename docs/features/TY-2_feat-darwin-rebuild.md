@@ -18,6 +18,13 @@
 - [ ] Implement `activate` command
 
 ### Design Notes
+The commands should map to darwin-rebuild commands, with `--flake`
+option.
+- `build <hostname>` maps to `build --flake <hostname>`
+- `switch <hostname>` maps to `switch --flake <hostname>`
+- `activate <hostname>` maps to `activate --flake <hostname>`
+
+
 See: [/docs/SPEC.md#commands](/docs/SPEC.md#commands)
 
 ## PR Links

@@ -1,16 +1,16 @@
 # Rebuild Command Specification
-# Version: 1.0
-# Systems: NixOS, nix-darwin
+# Version: 1.1
+# Systems: nix-darwin
 
 ## COMMANDS
 
-### build
+### build <hostname>
 Build system configuration without activation
 
 OPTIONS:
   --simulate    Dry-run build process (no changes made)
 
-### switch
+### switch <hostname>
 Build and activate configuration in one step
 
 OPTIONS:
@@ -18,7 +18,7 @@ OPTIONS:
   --simulate-activate  Dry-run only the activation phase
   --simulate-all       Dry-run both phases (build + activate)
 
-### activate
+### activate <hostname>
 Activate an already-built configuration
 
 OPTIONS:
@@ -26,26 +26,25 @@ OPTIONS:
 
 ## BEHAVIOR
 
-### Dry-run Guarantees
-- No system modifications when any --simulate* flag is used
-- Symlinks (/run/current-system, /nix/var/nix/profiles/system) remain unchanged
-- No services are restarted or modified
+### Command Implementation
+- All commands delegate directly to `darwin-rebuild` with `--flake` option
+- Example: `build myhost` → `darwin-rebuild build --flake myhost`
 
-### Command Equivalence
-switch = build + activate
-switch --simulate-all = build --simulate + activate --simulate
+### Error Handling
+- Errors are passed through directly from `darwin-rebuild`
+- No custom error processing or filtering
 
 ### Exit Codes
 0 = Success (or successful dry-run)
-1 = Error (configuration error or execution failure)
+Non-zero = Error from `darwin-rebuild`
 
 ## EXAMPLES
 
 # Check if configuration builds
-ty build --simulate
+ty build myhost --simulate
 
-# Test full activation flow
-ty switch --simulate-all
+# Perform full activation
+ty switch myhost
 
-# Verify service changes
-ty activate --simulate
+# Verify activation changes
+ty activate myhost --simulate
