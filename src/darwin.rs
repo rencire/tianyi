@@ -6,7 +6,7 @@ pub fn execute(subcommand: &str, hostname: &str) -> io::Result<()> {
         .arg(subcommand)
         .arg("--flake")
         .arg(hostname)
-        // Preserve color output from darwin-rebuild with stdio::inherit()
+        // Preserve color output from darwin-rebuild with stdio::inherit(e)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
