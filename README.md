@@ -19,6 +19,17 @@ with:
 ty switch <hostname>
 ```
 
+# Quickstart
+Try command via `nix run`:
+
+e.g. rebuild host and switch with your host:
+```
+nix run github:rencire/tianyi -- switch my-host
+```
+
+# Installation
+TODO
+
 # Notes
 
 
