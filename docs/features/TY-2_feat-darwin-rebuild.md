@@ -1,7 +1,7 @@
 # TY-2_feat-darwin-rebuild.md
 ## Metadata
 - **ID**: TY-2
-- **Status**: Draft
+- **Status**: Done
 - **Depends**: TY-1
 - **Owner**: @rencire
 - **Created**: 2025-09-09
@@ -13,9 +13,9 @@
 
 ## Specs
 ### Technical Requirements
-- [ ] Implement `build` command
-- [ ] Implement `switch` command
-- [ ] Implement `activate` command
+- [x] Implement `build` command
+- [x] Implement `switch` command
+- [x] Implement `activate` command
 
 ### Design Notes
 The commands should map to darwin-rebuild commands, with `--flake`
@@ -33,4 +33,5 @@ See: [/docs/SPEC.md#commands](/docs/SPEC.md#commands)
 - [TY-1](/docs/features/TY-1_feat-nixos-rebuild.md)
 
 ## History
+- 2025-09-12: Done 
 - 2025-09-09: Draft created
