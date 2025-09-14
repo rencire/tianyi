@@ -1,7 +1,7 @@
 # TY-4_feat-remote-switch.md
 ## Metadata
 - **ID**: TY-4
-- **Status**: Draft
+- **Status**: Done
 - **Depends**: TY-1, TY-2
 - **Owner**: @rencire
 - **Created**: 2025-09-13
@@ -13,7 +13,7 @@
 
 ## Specs
 ### Technical Requirements
-- [ ] Implement remote nixos configuration deployments for `switch` command
+- [x] Implement remote nixos configuration deployments for `switch` command
 
 ### Design Notes
 Essentially, we want to replace:
@@ -28,4 +28,5 @@ nix run gihub.com:rencire/tianyi -- switch .#my-host my-host-alias
 ## PR Links
 
 ## History
+- 2025-09-13: Done
 - 2025-09-13: Draft created
