@@ -16,15 +16,15 @@ sudo nixos-rebuild -- switch --flake .#<hostname>
 with:
 
 ```
-ty switch <hostname>
+ty switch .#<hostname>
 ```
 
 # Quickstart
 Try command via `nix run`:
 
-e.g. rebuild host and switch with your host:
+e.g. rebuild host and switch with `my-host` configuration defined in `./flake.nix` file:
 ```
-nix run github:rencire/tianyi -- switch my-host
+nix run github:rencire/tianyi -- switch .#my-host
 ```
 
 # Installation
