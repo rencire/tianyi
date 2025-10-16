@@ -1,7 +1,19 @@
+use anyhow::Result;
 use std::process::{Command, Stdio};
-use std::io;
 
-pub fn execute(subcommand: &str, hostname: &str) -> io::Result<()> {
+// pub fn build(hostname: &str) -> Result<()> {
+//     execute_darwin("build", hostname)
+// }
+
+pub fn switch(hostname: &str) -> Result<()> {
+    execute_darwin("switch", hostname)
+}
+
+// pub fn activate(hostname: &str) -> Result<()> {
+//     execute_darwin("activate", hostname)
+// }
+// TODO change this interface to accept CLI enums
+fn execute_darwin(subcommand: &str, hostname: &str) -> Result<()> {
     Command::new("darwin-rebuild")
         .arg(subcommand)
         .arg("--flake")
@@ -10,8 +22,9 @@ pub fn execute(subcommand: &str, hostname: &str) -> io::Result<()> {
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
-        .status()
-        .map(|_| ())
+        .status()?;
+    // If above line doesn't throw an error, return OK
+    Ok(())
 }
 
 #[cfg(test)]

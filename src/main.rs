@@ -1,39 +1,13 @@
-use clap::Parser;
+mod cli;
 mod commands;
 mod darwin;
 mod nixos;
-
-#[derive(Parser, Debug)]
-#[command(version, about = "Tianyi rebuild manager")]
-enum Cli {
-    /// Build system configuration
-    Build { hostname: String },
-    /// Build and activate configuration
-    Switch {
-        /// Flake reference (e.g., ".#my-host" or "myhost")
-        hostname: String,
-        /// (Optional) Remote target for deployment. Can be:
-        /// - An SSH target (e.g., "user@host" or "host")
-        /// - An SSH config host alias (e.g., "my-server" from ~/.ssh/config)
-        /// If omitted, we will use darwin-rebuild for the hostname on local machine.
-        #[arg(required = false)]
-        target_host: Option<String>,
-    },
-    /// Activate existing build
-    Activate { hostname: String },
-}
+use crate::cli::Cli;
+use clap::Parser;
 
 fn main() {
-    let (subcommand, hostname, target_host) = match Cli::parse() {
-        Cli::Build { hostname } => ("build", hostname, None),
-        Cli::Switch {
-            hostname,
-            target_host,
-        } => ("switch", hostname, target_host),
-        Cli::Activate { hostname } => ("activate", hostname, None),
-    };
-
-    if let Err(e) = commands::execute(subcommand, &hostname, target_host.as_deref()) {
+    let parsed = Cli::parse();
+    if let Err(e) = commands::execute(parsed) {
         eprintln!("Error: {}", e);
         std::process::exit(1);
     }
