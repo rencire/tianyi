@@ -1,6 +1,25 @@
 use crate::cli::Cli;
-use crate::{darwin, nixos};
+use crate::{darwin, nixos, nixos_anywhere};
 use anyhow::Result;
+use std::fs;
+use std::path::Path;
+use tempfile::TempDir;
+
+struct DeployContext {
+    temp_dir: TempDir,
+}
+
+fn deploy_command(
+    hostname: &str,
+    target_host: &str,
+    ssh_host_key_files: &str,
+    ssh_private_key_file: &str,
+) -> Result<()> {
+    let context = prepare_deploy_context(ssh_host_key_files)?;
+    let temp_path = context.temp_dir.path().to_str().unwrap();
+    nixos_anywhere::execute_deploy(temp_path, hostname, target_host, ssh_private_key_file)?;
+    Ok(())
+}
 
 pub fn execute(cli: Cli) -> Result<()> {
     match cli {
@@ -10,6 +29,17 @@ pub fn execute(cli: Cli) -> Result<()> {
             target_host,
         } => switch_command(hostname, target_host),
         Cli::Activate { hostname } => activate_command(hostname),
+        Cli::Deploy {
+            hostname,
+            target_host,
+            ssh_host_key_files,
+            ssh_private_key_file,
+        } => deploy_command(
+            &hostname,
+            &target_host,
+            &ssh_host_key_files,
+            &ssh_private_key_file,
+        ),
     }
 }
 
@@ -36,4 +66,113 @@ fn switch_command(hostname: String, target_host: Option<String>) -> Result<()> {
 
 fn activate_command(_hostname: String) -> Result<()> {
     todo!("implement build for darwin and nixos");
+}
+
+fn prepare_deploy_context(ssh_host_key_files: &str) -> Result<DeployContext> {
+    // Create a temporary directory
+    let temp_dir = TempDir::new()?;
+    let temp_path = temp_dir.path();
+
+    // Create the directory where sshd expects to find the host keys
+    let ssh_dir = temp_path.join("etc/ssh");
+    fs::create_dir_all(&ssh_dir)?;
+
+    // Copy keys to the temporary directory
+    let host_key_src = Path::new(ssh_host_key_files).join("ssh_host_ed25519_key");
+    let host_key_pub_src = Path::new(ssh_host_key_files).join("ssh_host_ed25519_key.pub");
+
+    let host_key_dst = ssh_dir.join("ssh_host_ed25519_key");
+    let host_key_pub_dst = ssh_dir.join("ssh_host_ed25519_key.pub");
+
+    // TODO check that these files exist for above paths
+
+    fs::copy(&host_key_src, &host_key_dst)?;
+    fs::copy(&host_key_pub_src, &host_key_pub_dst)?;
+
+    // Set the correct permissions so sshd will accept the key
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&host_key_dst, fs::Permissions::from_mode(0o600))?;
+        fs::set_permissions(&host_key_pub_dst, fs::Permissions::from_mode(0o644))?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        eprintln!("Warning: Cannot set Unix file permissions on this platform");
+    }
+
+    Ok(DeployContext { temp_dir })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_prepare_deploy_context_success() -> Result<()> {
+        let temp_keys = TempDir::new()?;
+        let keys_dir = temp_keys.path();
+
+        // Create dummy SSH key files
+        fs::write(keys_dir.join("ssh_host_ed25519_key"), "private_key_content")?;
+        fs::write(
+            keys_dir.join("ssh_host_ed25519_key.pub"),
+            "public_key_content",
+        )?;
+
+        let context = prepare_deploy_context(keys_dir.to_str().unwrap())?;
+
+        let ssh_dir = context.temp_dir.path().join("etc/ssh");
+        // Verify the ssh_dir was created
+        assert!(ssh_dir.exists());
+        assert!(ssh_dir.join("ssh_host_ed25519_key").exists());
+        assert!(ssh_dir.join("ssh_host_ed25519_key.pub").exists());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_prepare_deploy_context_missing_source_keys() -> Result<()> {
+        let result = prepare_deploy_context("/nonexistent/path");
+
+        // Should fail because source keys don't exist
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_prepare_deploy_context_permissions() -> Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_keys = TempDir::new()?;
+        let keys_dir = temp_keys.path();
+
+        fs::write(keys_dir.join("ssh_host_ed25519_key"), "private_key_content")?;
+        fs::write(
+            keys_dir.join("ssh_host_ed25519_key.pub"),
+            "public_key_content",
+        )?;
+
+        let context = prepare_deploy_context(keys_dir.to_str().unwrap())?;
+        let ssh_dir = context.temp_dir.path().join("etc/ssh");
+
+        // Check private key permissions are 0o600
+        let private_key_perms = fs::metadata(ssh_dir.join("ssh_host_ed25519_key"))?
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(private_key_perms, 0o600);
+
+        // Check public key permissions are 0o644
+        let public_key_perms = fs::metadata(ssh_dir.join("ssh_host_ed25519_key.pub"))?
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(public_key_perms, 0o644);
+
+        Ok(())
+    }
 }

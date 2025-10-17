@@ -2,6 +2,8 @@ mod cli;
 mod commands;
 mod darwin;
 mod nixos;
+mod nixos_anywhere;
+
 use crate::cli::Cli;
 use clap::Parser;
 

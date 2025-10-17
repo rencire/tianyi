@@ -16,7 +16,19 @@ pub enum Cli {
         #[arg(required = false)]
         target_host: Option<String>,
     },
+
     /// Activate existing build
     Activate { hostname: String },
-    // TODO add Deploy command enum here
+
+    /// Deploy build to new machine
+    Deploy {
+        hostname: String,
+        target_host: String,
+        /// Path to directory containing SSH host keys
+        #[arg(long, short = 'k')]
+        ssh_host_key_files: String,
+        /// Path to SSH private key for authentication
+        #[arg(long, short = 'i')]
+        ssh_private_key_file: String,
+    },
 }
