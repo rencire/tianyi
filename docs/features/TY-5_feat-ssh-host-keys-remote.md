@@ -1,7 +1,7 @@
 # TY-5_feat-ssh-host-keys-remote.md
 ## Metadata
 - **ID**: TY-5
-- **Status**: Ready
+- **Status**: Done
 - **Depends**: TY-5
 - **Owner**: @rencire
 - **Created**: 2025-09-23
