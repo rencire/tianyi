@@ -9,15 +9,17 @@ struct DeployContext {
     temp_dir: TempDir,
 }
 
-fn deploy_command(
+fn install_command(
     hostname: &str,
     target_host: &str,
-    ssh_host_key_files: &str,
-    ssh_private_key_file: &str,
+    identity: &str,
+    host_keys_dir: &str,
+    facter_json_path: &str,
 ) -> Result<()> {
-    let context = prepare_deploy_context(ssh_host_key_files)?;
+    let context = prepare_deploy_context(host_keys_dir)?;
     let temp_path = context.temp_dir.path().to_str().unwrap();
-    nixos_anywhere::execute_deploy(temp_path, hostname, target_host, ssh_private_key_file)?;
+    // nixos_anywhere::execute_install(hostname, target_host, identity)?;
+    nixos_anywhere::execute_install(hostname, target_host, identity, temp_path, facter_json_path)?;
     Ok(())
 }
 
@@ -29,16 +31,18 @@ pub fn execute(cli: Cli) -> Result<()> {
             target_host,
         } => switch_command(hostname, target_host),
         Cli::Activate { hostname } => activate_command(hostname),
-        Cli::Deploy {
+        Cli::Install {
             hostname,
             target_host,
-            ssh_host_key_files,
-            ssh_private_key_file,
-        } => deploy_command(
+            identity,
+            host_keys_dir,
+            facter_json_path,
+        } => install_command(
             &hostname,
             &target_host,
-            &ssh_host_key_files,
-            &ssh_private_key_file,
+            &identity,
+            &host_keys_dir,
+            &facter_json_path,
         ),
     }
 }
@@ -50,6 +54,7 @@ fn build_command(_hostname: String) -> Result<()> {
 fn switch_command(hostname: String, target_host: Option<String>) -> Result<()> {
     match target_host {
         // Note: for now, assume we always want to deploy nixos system for remote deployments.
+        // TODO this 'switch' should really be deploy
         Some(target) => {
             // Remote switch (NixOS)
             nixos::switch(&hostname, &target)
@@ -68,7 +73,8 @@ fn activate_command(_hostname: String) -> Result<()> {
     todo!("implement build for darwin and nixos");
 }
 
-fn prepare_deploy_context(ssh_host_key_files: &str) -> Result<DeployContext> {
+// See: https://github.com/nix-community/nixos-anywhere/blob/main/docs/howtos/extra-files.md
+fn prepare_deploy_context(host_keys_dir: &str) -> Result<DeployContext> {
     // Create a temporary directory
     let temp_dir = TempDir::new()?;
     let temp_path = temp_dir.path();
@@ -78,8 +84,8 @@ fn prepare_deploy_context(ssh_host_key_files: &str) -> Result<DeployContext> {
     fs::create_dir_all(&ssh_dir)?;
 
     // Copy keys to the temporary directory
-    let host_key_src = Path::new(ssh_host_key_files).join("ssh_host_ed25519_key");
-    let host_key_pub_src = Path::new(ssh_host_key_files).join("ssh_host_ed25519_key.pub");
+    let host_key_src = Path::new(host_keys_dir).join("ssh_host_ed25519_key");
+    let host_key_pub_src = Path::new(host_keys_dir).join("ssh_host_ed25519_key.pub");
 
     let host_key_dst = ssh_dir.join("ssh_host_ed25519_key");
     let host_key_pub_dst = ssh_dir.join("ssh_host_ed25519_key.pub");

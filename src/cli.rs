@@ -20,15 +20,15 @@ pub enum Cli {
     /// Activate existing build
     Activate { hostname: String },
 
-    /// Deploy build to new machine
-    Deploy {
+    /// Install nixos onto a new remote machine
+    Install {
         hostname: String,
         target_host: String,
-        /// Path to directory containing SSH host keys
-        #[arg(long, short = 'k')]
-        ssh_host_key_files: String,
-        /// Path to SSH private key for authentication
-        #[arg(long, short = 'i')]
-        ssh_private_key_file: String,
+        /// Path to SSH private key for nixos-anywhere to use for authentication to perform installation.
+        identity: String,
+        /// Path to directory containing SSH host keys we will copy over to target machine.
+        host_keys_dir: String,
+        /// Path to local filesystem where we want to store the facter.json generated from nixos-facter.
+        facter_json_path: String,
     },
 }

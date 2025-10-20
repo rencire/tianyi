@@ -8,16 +8,22 @@
 
 ## User Story
 > *As a user,
-> I want to easily deploy configurations to remote nixos machines with ssh host key,
+> I want to easily install configurations to remote nixos machines with ssh host key,
 > So I can decrypt secrets in my nix configuration and use them for services like wifi.
 
 ## Specs
 ### Technical Requirements
-- [] Add support for copying ssh host keys to remote machine via remote deployments with `switch` command
+- [] Add support for copying ssh host keys to remote machine via remote deployments with `nixos-anywhere` command
 
 e.g.
 ```
-tianyi switch .#hostA user@hostA —ssh-host-keys ./ssh_host_keys/hostA/ -i ~/.ssh/my_ssh_private_key
+tianyi install \
+  .#hostA \
+  user@hostA \
+  ~/.ssh/my_ssh_private_key \
+  ./ssh_host_keys/hostA/ \
+  ./path/to/facter.json
+
 ```
 
 We can base it off of this script:
