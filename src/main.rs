@@ -86,4 +86,13 @@ mod tests {
 
         assert!(result.is_err(), "install alias should not parse");
     }
+
+    #[test]
+    fn test_install_help_command_removed() {
+        let result = Cli::try_parse_from(["tianyi", "install", "--help"]);
+        assert!(
+            result.is_err(),
+            "install help alias should not parse because install command is removed"
+        );
+    }
 }
