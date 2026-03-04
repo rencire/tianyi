@@ -1,7 +1,6 @@
 mod cli;
 mod commands;
-mod darwin;
-mod nixos;
+mod nh;
 mod nixos_anywhere;
 
 use crate::cli::Cli;
@@ -26,14 +25,14 @@ mod tests {
     }
 
     #[test]
-    fn test_hostname_required() {
-        let cases = ["build", "switch", "activate"];
+    fn test_wrapper_commands_require_args() {
+        let cases = ["os", "darwin", "home", "search", "clean", "anywhere"];
 
         for cmd in cases {
-            let result = Cli::try_parse_from(&["tianyi", cmd]);
+            let result = Cli::try_parse_from(["tianyi", cmd]);
             assert!(
                 result.is_err(),
-                "{} should require hostname but didn't",
+                "{} should require downstream args but didn't",
                 cmd
             );
         }
@@ -42,46 +41,61 @@ mod tests {
     #[test]
     fn test_valid_commands() {
         let cases = [
-            ("build", "myhost"),
-            ("switch", "myhost"),
-            ("activate", "myhost"),
+            vec!["tianyi", "os", "switch", ".#myhost"],
+            vec!["tianyi", "darwin", "switch", ".#myhost"],
+            vec!["tianyi", "home", "switch", ".#home"],
+            vec!["tianyi", "search", "ripgrep"],
+            vec!["tianyi", "clean", "all"],
+            vec![
+                "tianyi",
+                "provision",
+                ".",
+                "-H",
+                "myhost",
+                "--target-host",
+                "root@example",
+                "--host-keys-dir",
+                "./keys/host",
+                "-i",
+                "~/.ssh/id_ed25519",
+                "--phases",
+                "disko,install,reboot",
+            ],
+            vec![
+                "tianyi",
+                "anywhere",
+                "--debug",
+                "--phases",
+                "disko,install,reboot",
+            ],
         ];
 
-        for (cmd, hostname) in cases {
-            let result = Cli::try_parse_from(&["tianyi", cmd, hostname]);
-            assert!(
-                result.is_ok(),
-                "{} with hostname should be valid but wasn't",
-                cmd
-            );
+        for args in cases {
+            let result = Cli::try_parse_from(args);
+            assert!(result.is_ok(), "command should parse but didn't");
         }
     }
 
     #[test]
-    fn test_install_without_identity_is_valid() {
+    fn test_install_command_removed() {
         let result = Cli::try_parse_from([
             "tianyi",
             "install",
-            ".#my-host",
-            "installer@example",
-            "./host-keys",
-            "./facter.json",
+            ".#myhost",
+            "root@example",
+            "--phases",
+            "disko,install,reboot",
         ]);
-        assert!(result.is_ok(), "install without identity should be valid");
+
+        assert!(result.is_err(), "install alias should not parse");
     }
 
     #[test]
-    fn test_install_with_identity_is_valid() {
-        let result = Cli::try_parse_from([
-            "tianyi",
-            "install",
-            ".#my-host",
-            "installer@example",
-            "--identity",
-            "~/.ssh/installer_ed25519",
-            "./host-keys",
-            "./facter.json",
-        ]);
-        assert!(result.is_ok(), "install with identity should be valid");
+    fn test_install_help_command_removed() {
+        let result = Cli::try_parse_from(["tianyi", "install", "--help"]);
+        assert!(
+            result.is_err(),
+            "install help alias should not parse because install command is removed"
+        );
     }
 }
