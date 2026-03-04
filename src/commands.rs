@@ -54,38 +54,25 @@ fn parse_provision_args(args: ProvisionArgs) -> Result<ParsedProvisionArgs> {
                 index += 2;
             }
             _ => {
-                if target_host.is_none()
-                    && !args.args[index].starts_with('-')
-                    && host_name.is_none()
-                {
-                    target_host = Some(args.args[index].clone());
-                    index += 1;
-                    continue;
-                }
-
                 passthrough_args.push(args.args[index].clone());
                 index += 1;
             }
         }
     }
 
+    let host_name = host_name.ok_or_else(|| {
+        anyhow!("provision requires -H/--hostname <HOST_NAME> (nh-style only)")
+    })?;
     let target_host = target_host.ok_or_else(|| {
-        anyhow!(
-            "provision requires a target host (use positional argument or --target-host <HOST>)"
-        )
+        anyhow!("provision requires --target-host <HOST> (nh-style only)")
     })?;
 
-    let hostname = match host_name {
-        Some(host_name) => {
-            if flake_ref.contains('#') {
-                return Err(anyhow!(
-                    "cannot combine -H/--hostname with flake references that already include '#'"
-                ));
-            }
-            format!("{}#{}", flake_ref, host_name)
-        }
-        None => flake_ref,
-    };
+    if flake_ref.contains('#') {
+        return Err(anyhow!(
+            "provision expects <flake_ref> without '#'; -H/--hostname selects the host output"
+        ));
+    }
+    let hostname = format!("{}#{}", flake_ref, host_name);
 
     Ok(ParsedProvisionArgs {
         hostname,
@@ -175,7 +162,10 @@ mod tests {
     fn test_parse_provision_args_with_host_keys_dir() -> Result<()> {
         let parsed = parse_provision_args(ProvisionArgs {
             args: vec![
-                String::from(".#host"),
+                String::from("."),
+                String::from("-H"),
+                String::from("host"),
+                String::from("--target-host"),
                 String::from("root@example"),
                 String::from("--host-keys-dir"),
                 String::from("/tmp/keys"),
@@ -245,7 +235,10 @@ mod tests {
     fn test_parse_provision_args_without_host_keys_dir() -> Result<()> {
         let parsed = parse_provision_args(ProvisionArgs {
             args: vec![
-                String::from(".#host"),
+                String::from("."),
+                String::from("-H"),
+                String::from("host"),
+                String::from("--target-host"),
                 String::from("root@example"),
                 String::from("--debug"),
             ],
@@ -331,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_provision_args_errors_for_hostname_with_hash_and_h_flag() {
+    fn test_parse_provision_args_errors_for_flake_ref_with_hash() {
         let result = parse_provision_args(ProvisionArgs {
             args: vec![
                 String::from(".#host"),
@@ -345,10 +338,38 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_provision_args_rejects_direct_style_target_host() {
+        let result = parse_provision_args(ProvisionArgs {
+            args: vec![
+                String::from("."),
+                String::from("root@example"),
+                String::from("--debug"),
+            ],
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_provision_args_requires_target_host_flag() {
+        let result = parse_provision_args(ProvisionArgs {
+            args: vec![
+                String::from("."),
+                String::from("-H"),
+                String::from("host"),
+                String::from("--debug"),
+            ],
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_parse_provision_args_missing_host_keys_dir_value() {
         let result = parse_provision_args(ProvisionArgs {
             args: vec![
-                String::from(".#host"),
+                String::from("."),
+                String::from("-H"),
+                String::from("host"),
+                String::from("--target-host"),
                 String::from("root@example"),
                 String::from("--host-keys-dir"),
             ],

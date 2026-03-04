@@ -6,41 +6,38 @@
 Run `nh` through Tianyi:
 
 ```sh
-nix run . -- os switch .#my-host
-nix run . -- darwin switch .#my-mac
-nix run . -- home switch .#my-home
-nix run . -- search ripgrep
+nix run github:rencire/tianyi -- os switch .#my-host
+nix run github:rencire/tianyi -- darwin switch .#my-mac
+nix run github:rencire/tianyi -- home switch .#my-home
+nix run github:rencire/tianyi -- search ripgrep
 ```
 
-Run `nixos-anywhere` through Tianyi:
+Run `nixos-anywhere` through Tianyi helpers (`provision`):
 
 ```sh
-nix run . -- provision .#host root@example \
+nix run github:rencire/tianyi -- provision . -H host --target-host root@example \
   --host-keys-dir ./ssh-host-keys/host \
   -i ~/.ssh/id_ed25519 \
   --generate-hardware-config nixos-facter ./hosts/host/facter.json \
   --phases disko,install,reboot
 ```
 
-`provision` also supports nh-style host selection:
-
-```sh
-nix run . -- provision . -H vishnu --target-host vishnu-deploy \
-  -i ~/.ssh/id_ed25519 --phases disko,install,reboot
-```
-
-In that example, `.` means “use the flake in the current directory”, and `-H vishnu` maps to host output `.#vishnu`.
+In that example, `.` means “use the flake in the current directory”, and `-H host` maps to host output `.#host`.
 
 Pass through extra `nixos-anywhere` args directly:
 
 ```sh
-nix run . -- provision .#host root@example --debug
+nix run github:rencire/tianyi -- provision . -H host --target-host root@example --debug
 ```
 
-Or forward directly to `nixos-anywhere` without Tianyi provision helpers:
+Or use the direct passthrough proxy (`anywhere`) without Tianyi helpers:
 
 ```sh
-nix run . -- anywhere --phases disko,install,reboot --debug
+nix run github:rencire/tianyi -- anywhere \
+  --flake .#host \
+  --target-host root@example \
+  --phases disko,install,reboot \
+  --debug
 ```
 
 # Command Mapping
@@ -76,24 +73,23 @@ tianyi search --json ripgrep
 Examples:
 
 ```sh
-tianyi anywhere --phases disko,install,reboot --debug
-# runs: nixos-anywhere --phases disko,install,reboot --debug
+tianyi anywhere --flake .#host --target-host root@example --phases disko,install,reboot --debug
+# runs: nixos-anywhere --flake .#host --target-host root@example --phases disko,install,reboot --debug
 
 tianyi anywhere --target-host root@example --flake .#host -i ~/.ssh/id_ed25519
 # runs: nixos-anywhere --target-host root@example --flake .#host -i ~/.ssh/id_ed25519
 ```
 
-`tianyi provision` is the structured helper. It always starts from:
+`tianyi provision` is the structured helper and accepts nh-style input only:
 
 ```text
-nixos-anywhere --flake <hostname> --target-host <target_host>
+tianyi provision <flake_ref> -H <host_name> --target-host <target_host> [nixos-anywhere args...]
 ```
 
-It also supports this nh-style mapping:
+It maps that input to this `nixos-anywhere` command shape:
 
 ```text
-tianyi provision <flake_ref> -H <host_name> --target-host <target_host> ...
-  -> nixos-anywhere --flake <flake_ref>#<host_name> --target-host <target_host> ...
+nixos-anywhere --flake <flake_ref>#<host_name> --target-host <target_host>
 ```
 
 Common case:
@@ -114,7 +110,7 @@ Everything else is passthrough to `nixos-anywhere` via trailing args.
 Example:
 
 ```sh
-tianyi provision .#host root@example \
+tianyi provision . -H host --target-host root@example \
   --host-keys-dir ./ssh-host-keys/host \
   -i ~/.ssh/id_ed25519 \
   --generate-hardware-config nixos-facter ./hosts/host/facter.json \
@@ -137,61 +133,13 @@ nixos-anywhere \
   --debug
 ```
 
-# Install NixOS Remotely
-Install a new NixOS machine with `nixos-anywhere` through the `install` command:
-
-```bash
-nix run github:rencire/tianyi -- install .#<hostname> <target_host> /path/to/host-keys /path/to/facter.json
-```
-
-Optional: pass `-i` or `--identity` to force a specific SSH private key for the login user:
-
-```bash
-nix run github:rencire/tianyi -- install .#<hostname> <target_host> --identity ~/.ssh/<target-login-key> /path/to/host-keys /path/to/facter.json
-```
-
-Examples:
-
-```bash
-nix run github:rencire/tianyi -- install .#vm0 installer@installer.local ./secrets/vm0/ssh-host-keys ./nix/nixos/vm0/facter.json
-```
-
-```bash
-nix run github:rencire/tianyi -- install .#vm0 installer@installer.local --identity ~/.ssh/installer_ed25519 ./secrets/vm0/ssh-host-keys ./nix/nixos/vm0/facter.json
-```
-
-`<target_host>` can be either:
-- `installer@host` or another non-root user with passwordless `sudo`
-- `root@host` if direct root SSH is enabled in your environment
-
-If you pass `--identity`, `~/.ssh/<target-login-key>` must be a private key authorized for the account in `<target_host>`.
-If you omit `--identity`, SSH defaults such as `~/.ssh/config`, SSH host aliases, or `ssh-agent` are used.
-
-Recommended: use a dedicated install user with passwordless `sudo` and a dedicated SSH key, instead of enabling direct root SSH.
-
-Why: this keeps the install flow compatible with the common hardening practice of disabling direct SSH access for `root`, while still allowing `nixos-anywhere` to run privileged install steps through `sudo`.
-
-Supported authentication and privilege combinations:
-- `root` + SSH password
-- `root` + SSH key
-- `user` + SSH password + passwordless `sudo`
-- `user` + SSH key + passwordless `sudo`
-
-Not supported for the normal non-root install path:
-- `user` + SSH password + sudo password prompt
-- `user` + SSH key + sudo password prompt
-
-The host key directory must contain:
-- `ssh_host_ed25519_key`
-- `ssh_host_ed25519_key.pub`
-
 # Notes
 - `tianyi os ...` forwards to `nh os ...`
 - `tianyi darwin ...` forwards to `nh darwin ...`
 - `tianyi home ...` forwards to `nh home ...`
 - `tianyi search ...` forwards to `nh search ...`
 - `tianyi clean ...` forwards to `nh clean ...`
-- `tianyi provision ...` calls `nixos-anywhere` directly
+- `tianyi provision ...` maps nh-style host selection to `nixos-anywhere` and can stage host keys via `--host-keys-dir`
 - `tianyi anywhere ...` forwards to `nixos-anywhere ...`
 - Set `NIXOS_ANYWHERE_BIN` if you want Tianyi to use a specific `nixos-anywhere` binary path
 

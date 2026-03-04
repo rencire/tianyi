@@ -49,7 +49,10 @@ mod tests {
             vec![
                 "tianyi",
                 "provision",
-                ".#myhost",
+                ".",
+                "-H",
+                "myhost",
+                "--target-host",
                 "root@example",
                 "--host-keys-dir",
                 "./keys/host",

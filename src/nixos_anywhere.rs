@@ -106,7 +106,10 @@ mod tests {
         let result = Cli::try_parse_from([
             "tianyi",
             "provision",
-            ".#host",
+            ".",
+            "-H",
+            "host",
+            "--target-host",
             "root@example",
             "--host-keys-dir",
             "/tmp/keys",
