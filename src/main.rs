@@ -60,14 +60,6 @@ mod tests {
             ],
             vec![
                 "tianyi",
-                "install",
-                ".#myhost",
-                "root@example",
-                "--phases",
-                "disko,install,reboot",
-            ],
-            vec![
-                "tianyi",
                 "anywhere",
                 "--debug",
                 "--phases",
@@ -79,5 +71,19 @@ mod tests {
             let result = Cli::try_parse_from(args);
             assert!(result.is_ok(), "command should parse but didn't");
         }
+    }
+
+    #[test]
+    fn test_install_command_removed() {
+        let result = Cli::try_parse_from([
+            "tianyi",
+            "install",
+            ".#myhost",
+            "root@example",
+            "--phases",
+            "disko,install,reboot",
+        ]);
+
+        assert!(result.is_err(), "install alias should not parse");
     }
 }

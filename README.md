@@ -145,7 +145,6 @@ nixos-anywhere \
 - `tianyi clean ...` forwards to `nh clean ...`
 - `tianyi provision ...` calls `nixos-anywhere` directly
 - `tianyi anywhere ...` forwards to `nixos-anywhere ...`
-- `tianyi install ...` remains as an alias of `tianyi provision ...`
 - Set `NIXOS_ANYWHERE_BIN` if you want Tianyi to use a specific `nixos-anywhere` binary path
 
 # Troubleshooting
