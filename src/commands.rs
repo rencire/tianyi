@@ -12,7 +12,7 @@ struct DeployContext {
 fn install_command(
     hostname: &str,
     target_host: &str,
-    identity: &str,
+    identity: Option<&str>,
     host_keys_dir: &str,
     facter_json_path: &str,
 ) -> Result<()> {
@@ -40,7 +40,7 @@ pub fn execute(cli: Cli) -> Result<()> {
         } => install_command(
             &hostname,
             &target_host,
-            &identity,
+            identity.as_deref(),
             &host_keys_dir,
             &facter_json_path,
         ),

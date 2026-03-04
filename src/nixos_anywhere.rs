@@ -4,7 +4,7 @@ use std::process::Command;
 pub fn execute_install(
     hostname: &str,
     target_host: &str,
-    identity: &str,
+    identity: Option<&str>,
     temp_path: &str,
     facter_json_path: &str,
 ) -> Result<()> {
@@ -12,16 +12,21 @@ pub fn execute_install(
     // when using this rust app, whereas when running nixos-anywhere directly
     //  in terminal, we only need to enter it once?
     // TODO: we should pin down this version of nixos-anywhere
-    Command::new("nix")
+    let mut command = Command::new("nix");
+    command
         .arg("run")
         .arg("github:nix-community/nixos-anywhere")
         .arg("--")
         .arg("--flake")
         .arg(hostname)
         .arg("--target-host")
-        .arg(target_host)
-        .arg("-i")
-        .arg(identity)
+        .arg(target_host);
+
+    if let Some(identity) = identity {
+        command.arg("-i").arg(identity);
+    }
+
+    command
         .arg("--extra-files")
         .arg(temp_path)
         .arg("--generate-hardware-config")

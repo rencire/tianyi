@@ -56,4 +56,32 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_install_without_identity_is_valid() {
+        let result = Cli::try_parse_from([
+            "tianyi",
+            "install",
+            ".#my-host",
+            "installer@example",
+            "./host-keys",
+            "./facter.json",
+        ]);
+        assert!(result.is_ok(), "install without identity should be valid");
+    }
+
+    #[test]
+    fn test_install_with_identity_is_valid() {
+        let result = Cli::try_parse_from([
+            "tianyi",
+            "install",
+            ".#my-host",
+            "installer@example",
+            "--identity",
+            "~/.ssh/installer_ed25519",
+            "./host-keys",
+            "./facter.json",
+        ]);
+        assert!(result.is_ok(), "install with identity should be valid");
+    }
 }

@@ -24,8 +24,10 @@ pub enum Cli {
     Install {
         hostname: String,
         target_host: String,
-        /// Path to SSH private key for nixos-anywhere to use for authentication to perform installation.
-        identity: String,
+        /// Optional path to the SSH private key used to log into target_host.
+        /// If omitted, SSH defaults such as ~/.ssh/config or ssh-agent are used.
+        #[arg(short = 'i', long = "identity")]
+        identity: Option<String>,
         /// Path to directory containing SSH host keys we will copy over to target machine.
         host_keys_dir: String,
         /// Path to local filesystem where we want to store the facter.json generated from nixos-facter.
