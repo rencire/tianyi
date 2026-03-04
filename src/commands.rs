@@ -17,31 +17,75 @@ struct ParsedProvisionArgs {
 }
 
 fn parse_provision_args(args: ProvisionArgs) -> Result<ParsedProvisionArgs> {
-    if args.args.len() < 2 {
+    if args.args.is_empty() {
         return Err(anyhow!(
-            "provision requires at least <hostname> and <target_host>"
+            "provision requires at least a flake reference argument"
         ));
     }
 
-    let hostname = args.args[0].clone();
-    let target_host = args.args[1].clone();
+    let flake_ref = args.args[0].clone();
+    let mut host_name = None;
+    let mut target_host = None;
     let mut host_keys_dir = None;
     let mut passthrough_args = Vec::new();
 
-    let mut index = 2;
+    let mut index = 1;
     while index < args.args.len() {
-        if args.args[index] == "--host-keys-dir" {
-            if index + 1 >= args.args.len() {
-                return Err(anyhow!("--host-keys-dir requires a value"));
+        match args.args[index].as_str() {
+            "--host-keys-dir" => {
+                if index + 1 >= args.args.len() {
+                    return Err(anyhow!("--host-keys-dir requires a value"));
+                }
+                host_keys_dir = Some(args.args[index + 1].clone());
+                index += 2;
             }
-            host_keys_dir = Some(args.args[index + 1].clone());
-            index += 2;
-            continue;
-        }
+            "-H" | "--hostname" => {
+                if index + 1 >= args.args.len() {
+                    return Err(anyhow!("{} requires a value", args.args[index]));
+                }
+                host_name = Some(args.args[index + 1].clone());
+                index += 2;
+            }
+            "--target-host" => {
+                if index + 1 >= args.args.len() {
+                    return Err(anyhow!("--target-host requires a value"));
+                }
+                target_host = Some(args.args[index + 1].clone());
+                index += 2;
+            }
+            _ => {
+                if target_host.is_none()
+                    && !args.args[index].starts_with('-')
+                    && host_name.is_none()
+                {
+                    target_host = Some(args.args[index].clone());
+                    index += 1;
+                    continue;
+                }
 
-        passthrough_args.push(args.args[index].clone());
-        index += 1;
+                passthrough_args.push(args.args[index].clone());
+                index += 1;
+            }
+        }
     }
+
+    let target_host = target_host.ok_or_else(|| {
+        anyhow!(
+            "provision requires a target host (use positional argument or --target-host <HOST>)"
+        )
+    })?;
+
+    let hostname = match host_name {
+        Some(host_name) => {
+            if flake_ref.contains('#') {
+                return Err(anyhow!(
+                    "cannot combine -H/--hostname with flake references that already include '#'"
+                ));
+            }
+            format!("{}#{}", flake_ref, host_name)
+        }
+        None => flake_ref,
+    };
 
     Ok(ParsedProvisionArgs {
         hostname,
@@ -158,6 +202,46 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_provision_args_with_nh_style_host_name_and_target() -> Result<()> {
+        let parsed = parse_provision_args(ProvisionArgs {
+            args: vec![
+                String::from("."),
+                String::from("-H"),
+                String::from("vishnu"),
+                String::from("--target-host"),
+                String::from("vishnu-deploy"),
+                String::from("-i"),
+                String::from("/tmp/id"),
+            ],
+        })?;
+
+        assert_eq!(parsed.hostname, ".#vishnu");
+        assert_eq!(parsed.target_host, "vishnu-deploy");
+        assert_eq!(
+            parsed.passthrough_args,
+            vec![String::from("-i"), String::from("/tmp/id"),]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_provision_args_with_long_hostname_alias() -> Result<()> {
+        let parsed = parse_provision_args(ProvisionArgs {
+            args: vec![
+                String::from("."),
+                String::from("--hostname"),
+                String::from("vishnu"),
+                String::from("--target-host"),
+                String::from("vishnu-deploy"),
+            ],
+        })?;
+
+        assert_eq!(parsed.hostname, ".#vishnu");
+        assert_eq!(parsed.target_host, "vishnu-deploy");
+        Ok(())
+    }
+
+    #[test]
     fn test_parse_provision_args_without_host_keys_dir() -> Result<()> {
         let parsed = parse_provision_args(ProvisionArgs {
             args: vec![
@@ -242,6 +326,20 @@ mod tests {
     fn test_parse_provision_args_missing_required_args() {
         let result = parse_provision_args(ProvisionArgs {
             args: vec![String::from(".#host")],
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_provision_args_errors_for_hostname_with_hash_and_h_flag() {
+        let result = parse_provision_args(ProvisionArgs {
+            args: vec![
+                String::from(".#host"),
+                String::from("-H"),
+                String::from("vishnu"),
+                String::from("--target-host"),
+                String::from("vishnu-deploy"),
+            ],
         });
         assert!(result.is_err());
     }

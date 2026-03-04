@@ -22,6 +22,15 @@ nix run . -- provision .#host root@example \
   --phases disko,install,reboot
 ```
 
+`provision` also supports nh-style host selection:
+
+```sh
+nix run . -- provision . -H vishnu --target-host vishnu-deploy \
+  -i ~/.ssh/id_ed25519 --phases disko,install,reboot
+```
+
+In that example, `.` means “use the flake in the current directory”, and `-H vishnu` maps to host output `.#vishnu`.
+
 Pass through extra `nixos-anywhere` args directly:
 
 ```sh
@@ -80,6 +89,20 @@ tianyi anywhere --target-host root@example --flake .#host -i ~/.ssh/id_ed25519
 nixos-anywhere --flake <hostname> --target-host <target_host>
 ```
 
+It also supports this nh-style mapping:
+
+```text
+tianyi provision <flake_ref> -H <host_name> --target-host <target_host> ...
+  -> nixos-anywhere --flake <flake_ref>#<host_name> --target-host <target_host> ...
+```
+
+Common case:
+
+```text
+tianyi provision . -H vishnu --target-host vishnu-deploy ...
+  -> nixos-anywhere --flake .#vishnu --target-host vishnu-deploy ...
+```
+
 Then Tianyi only adds one custom behavior:
 
 ```text
@@ -124,6 +147,11 @@ nixos-anywhere \
 - `tianyi anywhere ...` forwards to `nixos-anywhere ...`
 - `tianyi install ...` remains as an alias of `tianyi provision ...`
 - Set `NIXOS_ANYWHERE_BIN` if you want Tianyi to use a specific `nixos-anywhere` binary path
+
+# Troubleshooting
+- **`-i` still prompts for passphrase:** using `-i` may still trigger passphrase prompts even if an agent is running.
+- **Agent behavior differences:** without `-i`, SSH can rely on agent-loaded identities (`ssh-agent`/`gpg-agent`), which often avoids repeated prompts after the passphrase is cached.
+- **Why this matters:** some execution paths may stage or invoke keys in ways that do not fully reuse prior agent-authenticated state, so `-i` can behave differently from relying on default SSH identity selection.
 
 # Development
 - Agentic PR flow: see `docs/agentic-flow.md`
