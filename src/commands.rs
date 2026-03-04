@@ -1,6 +1,6 @@
-use crate::cli::Cli;
-use crate::{darwin, nixos, nixos_anywhere};
-use anyhow::Result;
+use crate::cli::{Cli, ProvisionArgs};
+use crate::{nh, nixos_anywhere};
+use anyhow::{anyhow, Result};
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
@@ -9,68 +9,78 @@ struct DeployContext {
     temp_dir: TempDir,
 }
 
-fn install_command(
-    hostname: &str,
-    target_host: &str,
-    identity: &str,
-    host_keys_dir: &str,
-    facter_json_path: &str,
-) -> Result<()> {
-    let context = prepare_deploy_context(host_keys_dir)?;
-    let temp_path = context.temp_dir.path().to_str().unwrap();
-    // nixos_anywhere::execute_install(hostname, target_host, identity)?;
-    nixos_anywhere::execute_install(hostname, target_host, identity, temp_path, facter_json_path)?;
+struct ParsedProvisionArgs {
+    hostname: String,
+    target_host: String,
+    host_keys_dir: Option<String>,
+    passthrough_args: Vec<String>,
+}
+
+fn parse_provision_args(args: ProvisionArgs) -> Result<ParsedProvisionArgs> {
+    if args.args.len() < 2 {
+        return Err(anyhow!(
+            "provision requires at least <hostname> and <target_host>"
+        ));
+    }
+
+    let hostname = args.args[0].clone();
+    let target_host = args.args[1].clone();
+    let mut host_keys_dir = None;
+    let mut passthrough_args = Vec::new();
+
+    let mut index = 2;
+    while index < args.args.len() {
+        if args.args[index] == "--host-keys-dir" {
+            if index + 1 >= args.args.len() {
+                return Err(anyhow!("--host-keys-dir requires a value"));
+            }
+            host_keys_dir = Some(args.args[index + 1].clone());
+            index += 2;
+            continue;
+        }
+
+        passthrough_args.push(args.args[index].clone());
+        index += 1;
+    }
+
+    Ok(ParsedProvisionArgs {
+        hostname,
+        target_host,
+        host_keys_dir,
+        passthrough_args,
+    })
+}
+
+fn provision_command(args: ProvisionArgs) -> Result<()> {
+    let parsed = parse_provision_args(args)?;
+
+    let deploy_context = match parsed.host_keys_dir.as_deref() {
+        Some(host_keys_dir) => Some(prepare_deploy_context(host_keys_dir)?),
+        None => None,
+    };
+    let extra_files_dir = deploy_context
+        .as_ref()
+        .and_then(|context| context.temp_dir.path().to_str());
+
+    nixos_anywhere::execute_provision(
+        &parsed.hostname,
+        &parsed.target_host,
+        &parsed.passthrough_args,
+        extra_files_dir,
+    )?;
     Ok(())
 }
 
 pub fn execute(cli: Cli) -> Result<()> {
     match cli {
-        Cli::Build { hostname } => build_command(hostname),
-        Cli::Switch {
-            hostname,
-            target_host,
-        } => switch_command(hostname, target_host),
-        Cli::Activate { hostname } => activate_command(hostname),
-        Cli::Install {
-            hostname,
-            target_host,
-            identity,
-            host_keys_dir,
-            facter_json_path,
-        } => install_command(
-            &hostname,
-            &target_host,
-            &identity,
-            &host_keys_dir,
-            &facter_json_path,
-        ),
+        Cli::Os(args) => nh::run("os", &args.args),
+        Cli::Darwin(args) => nh::run("darwin", &args.args),
+        Cli::Home(args) => nh::run("home", &args.args),
+        Cli::Search(args) => nh::run("search", &args.args),
+        Cli::Clean(args) => nh::run("clean", &args.args),
+        Cli::Provision(args) => provision_command(args),
+        Cli::Anywhere(args) => nixos_anywhere::run_raw(&args.args),
     }
-}
-
-fn build_command(_hostname: String) -> Result<()> {
-    todo!("implement build for darwin and nixos");
-}
-
-fn switch_command(hostname: String, target_host: Option<String>) -> Result<()> {
-    match target_host {
-        // Note: for now, assume we always want to deploy nixos system for remote deployments.
-        // TODO this 'switch' should really be deploy
-        Some(target) => {
-            // Remote switch (NixOS)
-            nixos::switch(&hostname, &target)
-        }
-        None => {
-            // TODO determine if on nixos or darwin. if so, call the function from
-            // the appropriate platform.
-            // Local switch (Darwin)
-            // For now, we assume local switch is always darwin
-            darwin::switch(&hostname)
-        }
-    }
-}
-
-fn activate_command(_hostname: String) -> Result<()> {
-    todo!("implement build for darwin and nixos");
 }
 
 // See: https://github.com/nix-community/nixos-anywhere/blob/main/docs/howtos/extra-files.md
@@ -114,7 +124,53 @@ fn prepare_deploy_context(host_keys_dir: &str) -> Result<DeployContext> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cli::ProvisionArgs;
     use std::fs;
+
+    #[test]
+    fn test_parse_provision_args_with_host_keys_dir() -> Result<()> {
+        let parsed = parse_provision_args(ProvisionArgs {
+            args: vec![
+                String::from(".#host"),
+                String::from("root@example"),
+                String::from("--host-keys-dir"),
+                String::from("/tmp/keys"),
+                String::from("-i"),
+                String::from("/tmp/id"),
+                String::from("--phases"),
+                String::from("disko,install,reboot"),
+            ],
+        })?;
+
+        assert_eq!(parsed.hostname, ".#host");
+        assert_eq!(parsed.target_host, "root@example");
+        assert_eq!(parsed.host_keys_dir, Some(String::from("/tmp/keys")));
+        assert_eq!(
+            parsed.passthrough_args,
+            vec![
+                String::from("-i"),
+                String::from("/tmp/id"),
+                String::from("--phases"),
+                String::from("disko,install,reboot"),
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_provision_args_without_host_keys_dir() -> Result<()> {
+        let parsed = parse_provision_args(ProvisionArgs {
+            args: vec![
+                String::from(".#host"),
+                String::from("root@example"),
+                String::from("--debug"),
+            ],
+        })?;
+
+        assert_eq!(parsed.host_keys_dir, None);
+        assert_eq!(parsed.passthrough_args, vec![String::from("--debug")]);
+        Ok(())
+    }
 
     #[test]
     fn test_prepare_deploy_context_success() -> Result<()> {
@@ -180,5 +236,25 @@ mod tests {
         assert_eq!(public_key_perms, 0o644);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_parse_provision_args_missing_required_args() {
+        let result = parse_provision_args(ProvisionArgs {
+            args: vec![String::from(".#host")],
+        });
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_provision_args_missing_host_keys_dir_value() {
+        let result = parse_provision_args(ProvisionArgs {
+            args: vec![
+                String::from(".#host"),
+                String::from("root@example"),
+                String::from("--host-keys-dir"),
+            ],
+        });
+        assert!(result.is_err());
     }
 }

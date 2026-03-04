@@ -1,45 +1,129 @@
 # Goals
-- Support common nix rebuild commands for nixos and darwin-nix via an easy-to-use interface.
-e.g.
-
-Replace:
-```
- sudo darwin-rebuild switch --flake .#<hostname>
-```
-
-or
-
-```
-sudo nixos-rebuild -- switch --flake .#<hostname>
-```
-
-with:
-
-```
-ty switch .#<hostname>
-```
+- Provide one house CLI that wraps `nh` for rebuild flows and `nixos-anywhere` for installs.
+- Keep Tianyi thin while still handling a few local workflow helpers such as SSH host key staging.
 
 # Quickstart
-Try command via `nix run`:
+Run `nh` through Tianyi:
 
-e.g. rebuild host and switch with `my-host` configuration defined in `./flake.nix` file:
-```
-nix run github:rencire/tianyi -- switch .#my-host
+```sh
+nix run . -- os switch .#my-host
+nix run . -- darwin switch .#my-mac
+nix run . -- home switch .#my-home
+nix run . -- search ripgrep
 ```
 
-# Installation
-TODO
+Run `nixos-anywhere` through Tianyi:
+
+```sh
+nix run . -- provision .#host root@example \
+  --host-keys-dir ./ssh-host-keys/host \
+  -i ~/.ssh/id_ed25519 \
+  --generate-hardware-config nixos-facter ./hosts/host/facter.json \
+  --phases disko,install,reboot
+```
+
+Pass through extra `nixos-anywhere` args directly:
+
+```sh
+nix run . -- provision .#host root@example --debug
+```
+
+Or forward directly to `nixos-anywhere` without Tianyi provision helpers:
+
+```sh
+nix run . -- anywhere --phases disko,install,reboot --debug
+```
+
+# Command Mapping
+Tianyi maps to the underlying tools like this:
+
+```text
+tianyi os <args...>        -> nh os <args...>
+tianyi darwin <args...>    -> nh darwin <args...>
+tianyi home <args...>      -> nh home <args...>
+tianyi search <args...>    -> nh search <args...>
+tianyi clean <args...>     -> nh clean <args...>
+tianyi anywhere <args...>  -> nixos-anywhere <args...>
+tianyi provision ...       -> nixos-anywhere with optional host key staging
+```
+
+The `nh`-backed commands are thin passthroughs. Whatever appears after the Tianyi subcommand is forwarded unchanged after the corresponding `nh` command group.
+
+Examples:
+
+```sh
+tianyi os switch .#host
+# runs: nh os switch .#host
+
+tianyi home build .#home
+# runs: nh home build .#home
+
+tianyi search --json ripgrep
+# runs: nh search --json ripgrep
+```
+
+`tianyi anywhere` is also a pure passthrough. Whatever appears after `anywhere` is forwarded unchanged to `nixos-anywhere`.
+
+Examples:
+
+```sh
+tianyi anywhere --phases disko,install,reboot --debug
+# runs: nixos-anywhere --phases disko,install,reboot --debug
+
+tianyi anywhere --target-host root@example --flake .#host -i ~/.ssh/id_ed25519
+# runs: nixos-anywhere --target-host root@example --flake .#host -i ~/.ssh/id_ed25519
+```
+
+`tianyi provision` is the structured helper. It always starts from:
+
+```text
+nixos-anywhere --flake <hostname> --target-host <target_host>
+```
+
+Then Tianyi only adds one custom behavior:
+
+```text
+--host-keys-dir <dir>      -> stages keys into a temp directory and passes --extra-files <tempdir>
+```
+
+Everything else is passthrough to `nixos-anywhere` via trailing args.
+
+Example:
+
+```sh
+tianyi provision .#host root@example \
+  --host-keys-dir ./ssh-host-keys/host \
+  -i ~/.ssh/id_ed25519 \
+  --generate-hardware-config nixos-facter ./hosts/host/facter.json \
+  --phases disko,install \
+  --post-kexec-ssh-port 2222 \
+  --debug
+```
+
+Maps to:
+
+```text
+nixos-anywhere \
+  --flake .#host \
+  --target-host root@example \
+  --extra-files <temporary directory containing etc/ssh/ssh_host_ed25519_key*> \
+  -i ~/.ssh/id_ed25519 \
+  --generate-hardware-config nixos-facter ./hosts/host/facter.json \
+  --phases disko,install \
+  --post-kexec-ssh-port 2222 \
+  --debug
+```
 
 # Notes
+- `tianyi os ...` forwards to `nh os ...`
+- `tianyi darwin ...` forwards to `nh darwin ...`
+- `tianyi home ...` forwards to `nh home ...`
+- `tianyi search ...` forwards to `nh search ...`
+- `tianyi clean ...` forwards to `nh clean ...`
+- `tianyi provision ...` calls `nixos-anywhere` directly
+- `tianyi anywhere ...` forwards to `nixos-anywhere ...`
+- `tianyi install ...` remains as an alias of `tianyi provision ...`
+- Set `NIXOS_ANYWHERE_BIN` if you want Tianyi to use a specific `nixos-anywhere` binary path
 
-
-Better names:
-- Commands:
-  - build
-    - --simulate
-  - switch
-    - --simulate-build
-    - --simulate-activate
-    - --simulate-all
-  - activate
-    - --simulate
+# Development
+- Agentic PR flow: see `docs/agentic-flow.md`

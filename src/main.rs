@@ -1,7 +1,6 @@
 mod cli;
 mod commands;
-mod darwin;
-mod nixos;
+mod nh;
 mod nixos_anywhere;
 
 use crate::cli::Cli;
@@ -26,14 +25,14 @@ mod tests {
     }
 
     #[test]
-    fn test_hostname_required() {
-        let cases = ["build", "switch", "activate"];
+    fn test_wrapper_commands_require_args() {
+        let cases = ["os", "darwin", "home", "search", "clean", "anywhere"];
 
         for cmd in cases {
-            let result = Cli::try_parse_from(&["tianyi", cmd]);
+            let result = Cli::try_parse_from(["tianyi", cmd]);
             assert!(
                 result.is_err(),
-                "{} should require hostname but didn't",
+                "{} should require downstream args but didn't",
                 cmd
             );
         }
@@ -42,18 +41,43 @@ mod tests {
     #[test]
     fn test_valid_commands() {
         let cases = [
-            ("build", "myhost"),
-            ("switch", "myhost"),
-            ("activate", "myhost"),
+            vec!["tianyi", "os", "switch", ".#myhost"],
+            vec!["tianyi", "darwin", "switch", ".#myhost"],
+            vec!["tianyi", "home", "switch", ".#home"],
+            vec!["tianyi", "search", "ripgrep"],
+            vec!["tianyi", "clean", "all"],
+            vec![
+                "tianyi",
+                "provision",
+                ".#myhost",
+                "root@example",
+                "--host-keys-dir",
+                "./keys/host",
+                "-i",
+                "~/.ssh/id_ed25519",
+                "--phases",
+                "disko,install,reboot",
+            ],
+            vec![
+                "tianyi",
+                "install",
+                ".#myhost",
+                "root@example",
+                "--phases",
+                "disko,install,reboot",
+            ],
+            vec![
+                "tianyi",
+                "anywhere",
+                "--debug",
+                "--phases",
+                "disko,install,reboot",
+            ],
         ];
 
-        for (cmd, hostname) in cases {
-            let result = Cli::try_parse_from(&["tianyi", cmd, hostname]);
-            assert!(
-                result.is_ok(),
-                "{} with hostname should be valid but wasn't",
-                cmd
-            );
+        for args in cases {
+            let result = Cli::try_parse_from(args);
+            assert!(result.is_ok(), "command should parse but didn't");
         }
     }
 }

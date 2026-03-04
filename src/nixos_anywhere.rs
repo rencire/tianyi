@@ -1,87 +1,292 @@
 use anyhow::Result;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
-pub fn execute_install(
+fn command_binary() -> String {
+    std::env::var("NIXOS_ANYWHERE_BIN").unwrap_or_else(|_| String::from("nixos-anywhere"))
+}
+
+fn build_install_command_for_binary(
+    binary: &str,
     hostname: &str,
     target_host: &str,
-    identity: &str,
-    temp_path: &str,
-    facter_json_path: &str,
-) -> Result<()> {
-    // TODO: debug why we need to enter passphrase for identity ssh key twice
-    // when using this rust app, whereas when running nixos-anywhere directly
-    //  in terminal, we only need to enter it once?
-    // TODO: we should pin down this version of nixos-anywhere
-    Command::new("nix")
-        .arg("run")
-        .arg("github:nix-community/nixos-anywhere")
-        .arg("--")
+    passthrough_args: &[String],
+    extra_files_dir: Option<&str>,
+) -> Command {
+    let mut command = Command::new(binary);
+
+    command
         .arg("--flake")
         .arg(hostname)
         .arg("--target-host")
-        .arg(target_host)
-        .arg("-i")
-        .arg(identity)
-        .arg("--extra-files")
-        .arg(temp_path)
-        .arg("--generate-hardware-config")
-        .arg("nixos-facter")
-        .arg(facter_json_path)
+        .arg(target_host);
+
+    if let Some(extra_files_dir) = extra_files_dir {
+        command.arg("--extra-files").arg(extra_files_dir);
+    }
+
+    command.args(passthrough_args);
+    command
+}
+
+fn build_install_command(
+    hostname: &str,
+    target_host: &str,
+    passthrough_args: &[String],
+    extra_files_dir: Option<&str>,
+) -> Command {
+    build_install_command_for_binary(
+        &command_binary(),
+        hostname,
+        target_host,
+        passthrough_args,
+        extra_files_dir,
+    )
+}
+
+fn build_raw_command_for_binary(binary: &str, args: &[String]) -> Command {
+    let mut command = Command::new(binary);
+    command.args(args);
+    command
+}
+
+fn build_raw_command(args: &[String]) -> Command {
+    build_raw_command_for_binary(&command_binary(), args)
+}
+
+pub fn execute_provision(
+    hostname: &str,
+    target_host: &str,
+    passthrough_args: &[String],
+    extra_files_dir: Option<&str>,
+) -> Result<()> {
+    let status = build_install_command(hostname, target_host, passthrough_args, extra_files_dir)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
         .status()?;
+    if !status.success() {
+        anyhow::bail!("nixos-anywhere exited with status {}", status);
+    }
 
-    // Command::new("nix")
-    //     .arg("run")
-    //     .arg("github:nix-community/nixos-anywhere")
-    //     .arg("--")
-    //     .arg("--flake")
-    //     .arg(".#vm0")
-    //     .arg("--target-host")
-    //     .arg("root@installer.local")
-    //     .arg("-i")
-    //     .arg("/Users/ren/.ssh/homelab_installer")
-    //     .arg("--extra-files")
-    //     .arg("./tmp")
-    //     .arg("--generate-hardware-config")
-    //     .arg("nixos-facter")
-    //     .arg("./nix/nixos/vm0/facter.json")
-    //     .status()?;
+    Ok(())
+}
 
-    // TempDir automatically cleans up when dropped
+pub fn run_raw(args: &[String]) -> Result<()> {
+    let status = build_raw_command(args)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()?;
+    if !status.success() {
+        anyhow::bail!("nixos-anywhere exited with status {}", status);
+    }
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
-    // use std::fs;
-    // use tempfile::TempDir;
+    use super::{
+        build_install_command, build_install_command_for_binary, build_raw_command,
+        build_raw_command_for_binary,
+    };
+    use crate::cli::Cli;
+    use clap::Parser;
+    use std::process::Command;
 
-    // #[test]
-    // fn test_setup_with_nixos_anywhere_integration() -> Result<()> {
-    //     let temp_keys = TempDir::new()?;
-    //     let keys_dir = temp_keys.path();
+    fn command_args(command: &Command) -> Vec<String> {
+        command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect()
+    }
 
-    //     fs::write(keys_dir.join("ssh_host_ed25519_key"), "private_key_content")?;
-    //     fs::write(
-    //         keys_dir.join("ssh_host_ed25519_key.pub"),
-    //         "public_key_content",
-    //     )?;
+    #[test]
+    fn provision_accepts_passthrough_args() {
+        let result = Cli::try_parse_from([
+            "tianyi",
+            "provision",
+            ".#host",
+            "root@example",
+            "--host-keys-dir",
+            "/tmp/keys",
+            "--phases",
+            "disko,install,reboot",
+            "--debug",
+        ]);
 
-    //     let private_key = TempDir::new()?;
-    //     fs::write(private_key.path().join("id_ed25519"), "test_private_key")?;
+        assert!(result.is_ok());
+    }
 
-    //     // This will fail at the nixos-anywhere step (command not found),
-    //     // but proves the preparation worked
-    //     let result = execute_install(
-    //         ".#test-host",
-    //         "test@localhost",
-    //         keys_dir.to_str().unwrap(),
-    //         // private_key.path().join("id_ed25519").to_str().unwrap(),
-    //         // "./path/to/facter/json/parent/dir",
-    //     );
+    #[test]
+    fn builds_minimal_install_command() {
+        let passthrough_args = Vec::new();
+        let command = build_install_command(".#host", "root@example", &passthrough_args, None);
 
-    //     // We expect an error (nixos-anywhere not found), not a file setup error
-    //     assert!(result.is_err());
-    //     Ok(())
-    // }
+        assert_eq!(command.get_program().to_string_lossy(), "nixos-anywhere");
+        assert_eq!(
+            command_args(&command),
+            vec!["--flake", ".#host", "--target-host", "root@example"]
+        );
+    }
+
+    #[test]
+    fn builds_install_command_with_all_supported_options() {
+        let passthrough_args = vec![
+            String::from("-i"),
+            String::from("/tmp/id"),
+            String::from("--generate-hardware-config"),
+            String::from("nixos-facter"),
+            String::from("/tmp/facter.json"),
+            String::from("--phases"),
+            String::from("disko,install,reboot"),
+            String::from("--disko-mode"),
+            String::from("format"),
+            String::from("--kexec"),
+            String::from("/tmp/kexec"),
+            String::from("--debug"),
+            String::from("--option"),
+            String::from("accept-flake-config"),
+            String::from("true"),
+        ];
+        let command = build_install_command(
+            ".#host",
+            "root@example",
+            &passthrough_args,
+            Some("/tmp/extra-files"),
+        );
+
+        assert_eq!(
+            command_args(&command),
+            vec![
+                "--flake",
+                ".#host",
+                "--target-host",
+                "root@example",
+                "--extra-files",
+                "/tmp/extra-files",
+                "-i",
+                "/tmp/id",
+                "--generate-hardware-config",
+                "nixos-facter",
+                "/tmp/facter.json",
+                "--phases",
+                "disko,install,reboot",
+                "--disko-mode",
+                "format",
+                "--kexec",
+                "/tmp/kexec",
+                "--debug",
+                "--option",
+                "accept-flake-config",
+                "true",
+            ]
+        );
+    }
+
+    #[test]
+    fn honors_configured_nixos_anywhere_binary() {
+        let passthrough_args = Vec::new();
+        let command = build_install_command_for_binary(
+            "/nix/store/abc/bin/nixos-anywhere",
+            ".#host",
+            "root@example",
+            &passthrough_args,
+            None,
+        );
+
+        assert_eq!(
+            command.get_program().to_string_lossy(),
+            "/nix/store/abc/bin/nixos-anywhere"
+        );
+    }
+
+    #[test]
+    fn builds_raw_nixos_anywhere_command() {
+        let args = vec![
+            String::from("--phases"),
+            String::from("disko,install"),
+            String::from("--debug"),
+        ];
+        let command = build_raw_command_for_binary("nixos-anywhere", &args);
+
+        assert_eq!(command.get_program().to_string_lossy(), "nixos-anywhere");
+        assert_eq!(command_args(&command), args);
+    }
+
+    #[test]
+    fn preserves_all_raw_nixos_anywhere_args_exactly() {
+        let cases = [
+            vec![
+                String::from("--phases"),
+                String::from("disko,install,reboot"),
+                String::from("--debug"),
+                String::from("--print-build-logs"),
+            ],
+            vec![
+                String::from("--kexec"),
+                String::from("/tmp/kexec"),
+                String::from("--post-kexec-ssh-port"),
+                String::from("2222"),
+                String::from("--env-password"),
+            ],
+            vec![
+                String::from("--disk-encryption-keys"),
+                String::from("root"),
+                String::from("/tmp/key"),
+                String::from("--no-reboot"),
+            ],
+            vec![
+                String::from("--target-host"),
+                String::from("root@example"),
+                String::from("--flake"),
+                String::from(".#host"),
+                String::from("-i"),
+                String::from("/tmp/id"),
+            ],
+        ];
+
+        for args in cases {
+            let command = build_raw_command(&args);
+            assert_eq!(command_args(&command), args);
+        }
+    }
+
+    #[test]
+    fn appends_host_key_extra_files_before_passthrough_args() {
+        let passthrough_args = vec![
+            String::from("-i"),
+            String::from("/tmp/id"),
+            String::from("--phases"),
+            String::from("disko,install"),
+            String::from("--post-kexec-ssh-port"),
+            String::from("2222"),
+            String::from("--debug"),
+        ];
+        let command = build_install_command(
+            ".#host",
+            "root@example",
+            &passthrough_args,
+            Some("/tmp/extra-files"),
+        );
+
+        assert_eq!(
+            command_args(&command),
+            vec![
+                "--flake",
+                ".#host",
+                "--target-host",
+                "root@example",
+                "--extra-files",
+                "/tmp/extra-files",
+                "-i",
+                "/tmp/id",
+                "--phases",
+                "disko,install",
+                "--post-kexec-ssh-port",
+                "2222",
+                "--debug",
+            ]
+        );
+    }
 }
