@@ -6,9 +6,9 @@
 Run `nh` through Tianyi:
 
 ```sh
-nix run github:rencire/tianyi -- os switch .#my-host
-nix run github:rencire/tianyi -- darwin switch .#my-mac
-nix run github:rencire/tianyi -- home switch .#my-home
+nix run github:rencire/tianyi -- os switch . -H my-host
+nix run github:rencire/tianyi -- darwin switch . -H my-mac
+nix run github:rencire/tianyi -- home switch . -c alice@my-host
 nix run github:rencire/tianyi -- search ripgrep
 ```
 
@@ -58,11 +58,14 @@ The `nh`-backed commands are thin passthroughs. Whatever appears after the Tiany
 Examples:
 
 ```sh
-tianyi os switch .#host
-# runs: nh os switch .#host
+tianyi os switch . -H host
+# runs: nh os switch . -H host
 
-tianyi home build .#home
-# runs: nh home build .#home
+tianyi darwin switch . -H mac
+# runs: nh darwin switch . -H mac
+
+tianyi home build . -c alice@host
+# runs: nh home build . -c alice@host
 
 tianyi search --json ripgrep
 # runs: nh search --json ripgrep
